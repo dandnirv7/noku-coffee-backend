@@ -1,3 +1,4 @@
+import { TransformInterceptor } from '@infra/common/interceptors/transform.interceptor';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 
@@ -7,6 +8,8 @@ async function bootstrap() {
   });
 
   app.setGlobalPrefix('api');
+
+  app.useGlobalInterceptors(new TransformInterceptor());
 
   const port = process.env.PORT ?? 3001;
 
