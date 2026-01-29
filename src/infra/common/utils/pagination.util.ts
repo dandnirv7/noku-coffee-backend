@@ -1,10 +1,5 @@
 import { PaginatedResult } from '../interfaces/paginated-result.interface';
 
-/**
- * Interface untuk menangkap perilaku dasar model Prisma (Delegate)
- * T: Tipe Entitas (contoh: Product)
- * A: Tipe Arguments (contoh: Prisma.ProductFindManyArgs)
- */
 interface PrismaModelDelegate<T, A> {
   count(args?: { where?: any }): Promise<number>;
   findMany(args?: A): Promise<T[]>;
@@ -12,7 +7,7 @@ interface PrismaModelDelegate<T, A> {
 
 export async function paginate<T, A>(
   model: PrismaModelDelegate<T, A>,
-  args: A & { where?: any }, // Memastikan args memiliki struktur yang valid untuk count & findMany
+  args: A & { where?: any },
   options: { page?: number; perPage?: number } = {},
 ): Promise<PaginatedResult<T>> {
   const page = Number(options.page) || 1;
@@ -20,7 +15,6 @@ export async function paginate<T, A>(
 
   const skip = (page - 1) * perPage;
 
-  // Jalankan query secara paralel
   const [total, data] = await Promise.all([
     model.count({ where: args.where }),
     model.findMany({
