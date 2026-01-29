@@ -35,4 +35,30 @@ export class PrismaService
   async onApplicationShutdown(signal?: string) {
     await this.$disconnect();
   }
+
+  readonly extended = this.$extends({
+    query: {
+      $allModels: {
+        async $allOperations({ model, operation, args, query }) {
+          const softDeleteModels = ['User', 'Category', 'Product'];
+
+          if (
+            softDeleteModels.includes(model) &&
+            ['findMany', 'findUnique', 'findFirst', 'count'].includes(operation)
+          ) {
+            const queryArgs = args as { where?: Record<string, unknown> };
+
+            queryArgs.where = {
+              ...(queryArgs.where || {}),
+              deletedAt: null,
+            };
+
+            return query(queryArgs as typeof args);
+          }
+
+          return query(args);
+        },
+      },
+    },
+  });
 }
