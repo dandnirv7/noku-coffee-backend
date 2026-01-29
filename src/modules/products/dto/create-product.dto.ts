@@ -52,6 +52,11 @@ export class CreateProductDto {
   @Type(() => Number)
   stock: number;
 
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  images?: string[];
+
   @IsOptional() @IsString() origin?: string;
   @IsOptional() @IsString() roastLevel?: string;
   @IsOptional() @IsString() process?: string;

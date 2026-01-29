@@ -30,7 +30,7 @@ export class ProductsService {
     return product;
   }
 
-  async create(dto: CreateProductDto, file?: Express.Multer.File) {
+  async create(dto: CreateProductDto, files?: Express.Multer.File[]) {
     const { bundleItems, ...productData } = dto;
 
     if (
@@ -47,9 +47,10 @@ export class ProductsService {
       let imageUrls: string[] = [];
       const { categoryId, type, ...restProductData } = productData;
 
-      if (file) {
-        const url = await this.supabaseService.uploadImage(file);
-        imageUrls.push(url);
+      if (files && files.length > 0) {
+        imageUrls = await Promise.all(
+          files.map((file) => this.supabaseService.uploadImage(file)),
+        );
       }
 
       const product = await tx.product.create({

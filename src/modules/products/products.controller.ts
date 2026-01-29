@@ -11,9 +11,10 @@ import {
   Post,
   Query,
   UploadedFile,
+  UploadedFiles,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { AllowAnonymous, Roles } from '@thallesp/nestjs-better-auth';
 import { ProductType, UserRole } from 'generated/prisma/enums';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -27,10 +28,10 @@ export class ProductsController {
 
   @Post()
   @Roles([UserRole.ADMIN])
-  @UseInterceptors(FileInterceptor('image'))
+  @UseInterceptors(FilesInterceptor('image', 5))
   async create(
     @Body() createProductDto: CreateProductDto,
-    @UploadedFile(
+    @UploadedFiles(
       new ParseFilePipe({
         validators: [
           new MaxFileSizeValidator({ maxSize: 1024 * 1024 * 2 }),
@@ -39,11 +40,11 @@ export class ProductsController {
         fileIsRequired: false,
       }),
     )
-    file?: Express.Multer.File,
+    files?: Express.Multer.File[],
   ) {
     return {
       message: 'Product created successfully',
-      data: await this.productsService.create(createProductDto, file),
+      data: await this.productsService.create(createProductDto, files),
     };
   }
 
