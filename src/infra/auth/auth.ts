@@ -1,6 +1,6 @@
 import { betterAuth } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
-import { bearer } from 'better-auth/plugins';
+import { admin, bearer } from 'better-auth/plugins';
 import { MailerService } from '@infra/mailer/mailer.service';
 import { authTemplates } from '@infra/mailer/templates/auth-templates';
 import { PrismaService } from '@infra/database/prisma.service';
@@ -10,6 +10,12 @@ export function createAuth(prisma: PrismaService, mailer: MailerService) {
     database: prismaAdapter(prisma, { provider: 'postgresql' }),
     secret: process.env.BETTER_AUTH_SECRET!,
     url: process.env.BETTER_AUTH_URL!,
+
+    user: {
+      additionalFields: {
+        role: { type: 'string', input: false },
+      },
+    },
 
     emailAndPassword: {
       enabled: true,
@@ -33,6 +39,6 @@ export function createAuth(prisma: PrismaService, mailer: MailerService) {
     },
 
     trustedOrigins: [process.env.FRONTEND_URL!],
-    plugins: [bearer()],
+    plugins: [bearer(), admin()],
   });
 }
