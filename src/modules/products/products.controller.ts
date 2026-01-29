@@ -18,8 +18,9 @@ import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { AllowAnonymous, Roles } from '@thallesp/nestjs-better-auth';
 import { ProductType, UserRole } from 'generated/prisma/enums';
 import { CreateProductDto } from './dto/create-product.dto';
-import { ProductsService } from './products.service';
+import { UpdateImageOrderDto } from './dto/update-image-order.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { ProductsService } from './products.service';
 
 @Controller('products')
 @Roles([UserRole.ADMIN])
@@ -116,6 +117,23 @@ export class ProductsController {
     return {
       message: 'Product restored successfully',
       data: await this.productsService.findOne(id),
+    };
+  }
+
+  @Patch(':id/images/reorder')
+  @Roles([UserRole.ADMIN])
+  async reorderImages(
+    @Param('id') id: string,
+    @Body() updateImageOrderDto: UpdateImageOrderDto,
+  ) {
+    const updatedProduct = await this.productsService.updateImageOrder(
+      id,
+      updateImageOrderDto.images,
+    );
+
+    return {
+      message: 'Image order updated successfully',
+      data: updatedProduct,
     };
   }
 }

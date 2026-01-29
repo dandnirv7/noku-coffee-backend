@@ -168,4 +168,17 @@ export class ProductsService {
       data: { deletedAt: null },
     });
   }
+
+  async updateImageOrder(id: string, imageUrls: string[]) {
+    await this.findOneByIdOrThrow(id);
+
+    return this.prisma.product.update({
+      where: { id },
+      data: {
+        images: {
+          set: imageUrls,
+        },
+      },
+    });
+  }
 }
