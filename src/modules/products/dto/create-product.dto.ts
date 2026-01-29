@@ -33,6 +33,7 @@ export class CreateProductDto {
 
   @IsNumber()
   @Min(0)
+  @Type(() => Number)
   price: number;
 
   @IsEnum(ProductType)
@@ -48,6 +49,7 @@ export class CreateProductDto {
 
   @IsNumber()
   @Min(0)
+  @Type(() => Number)
   stock: number;
 
   @IsOptional() @IsString() origin?: string;
