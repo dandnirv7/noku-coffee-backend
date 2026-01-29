@@ -5,19 +5,21 @@ import { MailerModule } from '@infra/mailer/mailer.module';
 import { MailerService } from '@infra/mailer/mailer.service';
 import { CategoriesController } from '@modules/categories/categories.controller';
 import { CategoriesService } from '@modules/categories/categories.service';
-import { ProductsService } from '@modules/products/prodcuts.service';
-import { ProductsController } from '@modules/products/products.contoller';
+import { ProductsModule } from '@modules/products/products.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from '@thallesp/nestjs-better-auth';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { CategoriesModule } from '@modules/categories/categories.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env' }),
     PrismaModule,
     MailerModule,
+    ProductsModule,
+    CategoriesModule,
     AuthModule.forRootAsync({
       imports: [PrismaModule, MailerModule],
       inject: [PrismaService, MailerService],
@@ -26,7 +28,7 @@ import { AppService } from './app.service';
       }),
     }),
   ],
-  controllers: [AppController, CategoriesController, ProductsController],
-  providers: [AppService, CategoriesService, ProductsService],
+  controllers: [AppController],
+  providers: [AppService],
 })
 export class AppModule {}
