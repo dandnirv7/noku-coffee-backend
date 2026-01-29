@@ -1,6 +1,10 @@
 import { paginate } from '@infra/common/utils/pagination.util';
 import { PrismaService } from '@infra/database/prisma.service';
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Roles } from '@thallesp/nestjs-better-auth';
 import { Category, Prisma } from 'generated/prisma/client';
 import { UserRole } from 'generated/prisma/enums';
@@ -18,10 +22,7 @@ export class CategoriesService {
         data: { name, slug },
       });
     } catch (error) {
-      if (error.code === 'P2002') {
-        throw new BadRequestException('Category sudah ada!');
-      }
-      throw error;
+      throw new BadRequestException('Category already exists!');
     }
   }
 
@@ -29,7 +30,7 @@ export class CategoriesService {
   async findAll(query: { page?: number; perPage?: number }) {
     const { page, perPage } = query;
     return paginate<Category, Prisma.CategoryFindManyArgs>(
-      this.prisma.category,
+      this.prisma.extended.category,
       {
         orderBy: { name: 'asc' },
       },
@@ -38,7 +39,15 @@ export class CategoriesService {
   }
 
   @Roles([UserRole.ADMIN])
-  async delete(id: string) {
-    return this.prisma.category.delete({ where: { id } });
+  async remove(id: string) {
+    const category = await this.prisma.extended.category.findUnique({
+      where: { id },
+    });
+    if (!category) throw new NotFoundException('Category not found');
+
+    return this.prisma.category.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
   }
 }

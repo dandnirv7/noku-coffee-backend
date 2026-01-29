@@ -1,5 +1,3 @@
-import { Roles } from '@infra/auth/decorators/roles.decorator';
-import { RolesGuard } from '@infra/auth/guards/roles.guard';
 import {
   Body,
   Controller,
@@ -10,18 +8,18 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { AllowAnonymous } from '@thallesp/nestjs-better-auth';
+import { AllowAnonymous, Roles } from '@thallesp/nestjs-better-auth';
 import { UserRole } from 'generated/prisma/enums';
 import { CategoriesService } from './categories.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 
 @Controller('categories')
-@UseGuards(RolesGuard)
+@Roles([UserRole.ADMIN])
 export class CategoriesController {
   constructor(private readonly categoriesService: CategoriesService) {}
 
   @Post()
-  @Roles(UserRole.ADMIN)
+  @Roles([UserRole.ADMIN])
   async create(@Body() dto: CreateCategoryDto) {
     return {
       message: 'Category created successfully',
@@ -42,11 +40,11 @@ export class CategoriesController {
   }
 
   @Delete(':id')
-  @Roles(UserRole.ADMIN)
+  @Roles([UserRole.ADMIN])
   async delete(@Param('id') id: string) {
     return {
       message: 'Category deleted successfully',
-      data: await this.categoriesService.delete(id),
+      data: await this.categoriesService.remove(id),
     };
   }
 }
