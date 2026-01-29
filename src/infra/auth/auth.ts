@@ -1,9 +1,9 @@
+import { PrismaService } from '@infra/database/prisma.service';
+import { MailerService } from '@infra/mailer/mailer.service';
+import { authTemplates } from '@infra/mailer/templates/auth-templates';
 import { betterAuth } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { admin, bearer } from 'better-auth/plugins';
-import { MailerService } from '@infra/mailer/mailer.service';
-import { authTemplates } from '@infra/mailer/templates/auth-templates';
-import { PrismaService } from '@infra/database/prisma.service';
 
 export function createAuth(prisma: PrismaService, mailer: MailerService) {
   return betterAuth({
@@ -13,7 +13,11 @@ export function createAuth(prisma: PrismaService, mailer: MailerService) {
 
     user: {
       additionalFields: {
-        role: { type: 'string', input: false },
+        role: {
+          type: 'string',
+          input: false,
+          defaultValue: 'USER',
+        },
       },
     },
 
@@ -39,6 +43,12 @@ export function createAuth(prisma: PrismaService, mailer: MailerService) {
     },
 
     trustedOrigins: [process.env.FRONTEND_URL!],
-    plugins: [bearer(), admin()],
+    plugins: [
+      bearer(),
+      admin({
+        defaultRole: 'USER',
+        adminRoles: 'ADMIN',
+      }),
+    ],
   });
 }

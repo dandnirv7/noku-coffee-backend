@@ -15,10 +15,16 @@ const auth = betterAuth({
   emailAndPassword: { enabled: true },
   user: {
     additionalFields: {
-      role: { type: 'string', input: false },
+      role: { type: 'string', input: false, defaultValue: 'USER' },
     },
   },
-  plugins: [bearer(), admin()],
+  plugins: [
+    bearer(),
+    admin({
+      defaultRole: 'USER',
+      adminRoles: 'ADMIN',
+    }),
+  ],
 });
 
 export default auth;
