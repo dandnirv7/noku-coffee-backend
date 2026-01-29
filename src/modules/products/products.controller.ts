@@ -107,4 +107,14 @@ export class ProductsController {
       message: 'Product deleted successfully',
     };
   }
+
+  @Patch(':id/restore')
+  @Roles([UserRole.ADMIN])
+  async restore(@Param('id') id: string) {
+    await this.productsService.restore(id);
+    return {
+      message: 'Product restored successfully',
+      data: await this.productsService.findOne(id),
+    };
+  }
 }

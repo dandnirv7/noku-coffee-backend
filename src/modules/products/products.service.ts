@@ -21,6 +21,15 @@ export class ProductsService {
     private supabaseService: SupabaseService,
   ) {}
 
+  private async findOneByIdOrThrow(id: string) {
+    const product = await this.prisma.extended.product.findUnique({
+      where: { id },
+    });
+    if (!product)
+      throw new NotFoundException(`Product with id ${id} not found`);
+    return product;
+  }
+
   async create(dto: CreateProductDto, file?: Express.Multer.File) {
     const { bundleItems, ...productData } = dto;
 
@@ -29,7 +38,7 @@ export class ProductsService {
       (!bundleItems || bundleItems.length === 0)
     ) {
       throw new BadRequestException(
-        'Produk tipe Bundle harus memiliki minimal 1 item.',
+        'Bundle product must have at least one item.',
       );
     }
 
@@ -85,7 +94,7 @@ export class ProductsService {
     const { where, orderBy } = ProductFilterBuilder.build(query);
 
     return paginate<Product, Prisma.ProductFindManyArgs>(
-      this.prisma.product,
+      this.prisma.extended.product,
       {
         where,
         orderBy,
@@ -96,8 +105,8 @@ export class ProductsService {
   }
 
   async findOne(slug: string) {
-    return this.prisma.product.findUnique({
-      where: { slug },
+    const product = await this.prisma.extended.product.findUnique({
+      where: { slug, deletedAt: null },
       include: {
         category: { select: { name: true } },
         bundleItems: {
@@ -105,6 +114,9 @@ export class ProductsService {
         },
       },
     });
+
+    if (!product) throw new NotFoundException('Product not found');
+    return product;
   }
 
   async update(id: string, dto: UpdateProductDto, file?: Express.Multer.File) {
@@ -143,15 +155,16 @@ export class ProductsService {
 
     await this.supabaseService.deleteImages(product.images);
 
-    return this.prisma.product.delete({
+    return this.prisma.extended.product.update({
       where: { id },
+      data: { deletedAt: new Date() },
     });
   }
 
-  private async findOneByIdOrThrow(id: string) {
-    const product = await this.prisma.product.findUnique({ where: { id } });
-    if (!product)
-      throw new NotFoundException(`Produk dengan ID ${id} tidak ditemukan`);
-    return product;
+  async restore(id: string) {
+    return this.prisma.product.update({
+      where: { id },
+      data: { deletedAt: null },
+    });
   }
 }
