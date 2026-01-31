@@ -56,17 +56,23 @@ export class ProductsController {
     @Query('page') page?: number,
     @Query('perPage') perPage?: number,
     @Query('search') search?: string,
-    @Query('category') category?: string,
+    @Query('category') category?: string | string[],
     @Query('minPrice') minPrice?: number,
     @Query('maxPrice') maxPrice?: number,
     @Query('sort') sort?: string,
   ) {
+    const categoryArray = Array.isArray(category)
+      ? category
+      : category
+        ? [category]
+        : [];
+
     const products = await this.productsService.findAll({
       type,
       page,
       perPage,
       search,
-      category,
+      category: categoryArray,
       minPrice,
       maxPrice,
       sort,

@@ -84,7 +84,7 @@ export class ProductsService {
 
   async findAll(query: {
     type?: ProductType;
-    category?: string;
+    category?: string | string[];
     search?: string;
     minPrice?: number;
     maxPrice?: number;
