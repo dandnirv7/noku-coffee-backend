@@ -36,9 +36,10 @@ model User {
   updatedAt     DateTime  @updatedAt
   deletedAt     DateTime?
 
-  sessions Session[]
-  accounts Account[]
-  Cart     Cart?
+  sessions      Session[]
+  accounts      Account[]
+  Cart          Cart?
+  WishlistItems WishlistItem[]
 
   banned     Boolean?  @default(false)
   banReason  String?
@@ -135,7 +136,8 @@ model Product {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  cartItems CartItem[]
+  cartItems     CartItem[]
+  wishlistItems WishlistItem[]
 
   @@map("product")
 }
@@ -177,4 +179,18 @@ model CartItem {
   @@unique([cartId, productId])
   @@index([cartId])
   @@map("cart_item")
+}
+
+model WishlistItem {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  createdAt DateTime @default(now())
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([userId])
+  @@map("wishlist_item")
 }
