@@ -3,15 +3,14 @@ import { PrismaModule } from '@infra/database/prisma.module';
 import { PrismaService } from '@infra/database/prisma.service';
 import { MailerModule } from '@infra/mailer/mailer.module';
 import { MailerService } from '@infra/mailer/mailer.service';
-import { CategoriesController } from '@modules/categories/categories.controller';
-import { CategoriesService } from '@modules/categories/categories.service';
+import { CartModule } from '@modules/cart/cart.module';
+import { CategoriesModule } from '@modules/categories/categories.module';
 import { ProductsModule } from '@modules/products/products.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from '@thallesp/nestjs-better-auth';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { CategoriesModule } from '@modules/categories/categories.module';
 
 @Module({
   imports: [
@@ -20,6 +19,7 @@ import { CategoriesModule } from '@modules/categories/categories.module';
     MailerModule,
     ProductsModule,
     CategoriesModule,
+    CartModule,
     AuthModule.forRootAsync({
       imports: [PrismaModule, MailerModule],
       inject: [PrismaService, MailerService],

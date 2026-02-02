@@ -4,7 +4,7 @@ import { ProductType } from 'generated/prisma/enums';
 export class ProductFilterBuilder {
   static build(query: {
     type?: ProductType;
-    category?: string;
+    category?: string | string[];
     search?: string;
     minPrice?: number;
     maxPrice?: number;
@@ -14,9 +14,23 @@ export class ProductFilterBuilder {
     let orderBy: Prisma.ProductOrderByWithRelationInput = { createdAt: 'desc' };
 
     if (query.type) where.type = { has: query.type };
+
     if (query.search)
       where.name = { contains: query.search, mode: 'insensitive' };
-    if (query.category) where.category = { slug: query.category };
+
+    if (query.category) {
+      const categories = Array.isArray(query.category)
+        ? query.category
+        : [query.category];
+
+      if (categories.length > 0) {
+        where.category = {
+          slug: {
+            in: categories,
+          },
+        };
+      }
+    }
 
     if (query.minPrice !== undefined || query.maxPrice !== undefined) {
       where.price = { gte: query.minPrice, lte: query.maxPrice };
