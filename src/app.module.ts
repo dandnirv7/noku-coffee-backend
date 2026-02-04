@@ -5,6 +5,7 @@ import { MailerModule } from '@infra/mailer/mailer.module';
 import { MailerService } from '@infra/mailer/mailer.service';
 import { CartModule } from '@modules/cart/cart.module';
 import { CategoriesModule } from '@modules/categories/categories.module';
+import { OrderModule } from '@modules/order/order.module';
 import { ProductsModule } from '@modules/products/products.module';
 import { WishlistModule } from '@modules/wishlist/wishlist.module';
 import { Module } from '@nestjs/common';
@@ -22,6 +23,7 @@ import { AppService } from './app.service';
     CategoriesModule,
     CartModule,
     WishlistModule,
+    OrderModule,
     AuthModule.forRootAsync({
       imports: [PrismaModule, MailerModule],
       inject: [PrismaService, MailerService],

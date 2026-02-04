@@ -25,6 +25,14 @@ enum ProductType {
   BUNDLE
 }
 
+enum OrderStatus {
+  PENDING
+  PAID
+  SHIPPED
+  COMPLETED
+  CANCELLED
+}
+
 model User {
   id            String    @id
   name          String
@@ -40,6 +48,7 @@ model User {
   accounts      Account[]
   Cart          Cart?
   WishlistItems WishlistItem[]
+  Orders        Order[]
 
   banned     Boolean?  @default(false)
   banReason  String?
@@ -138,6 +147,7 @@ model Product {
 
   cartItems     CartItem[]
   wishlistItems WishlistItem[]
+  orderItems    OrderItem[]
 
   @@map("product")
 }
@@ -193,4 +203,33 @@ model WishlistItem {
   @@unique([userId, productId])
   @@index([userId])
   @@map("wishlist_item")
+}
+
+model Order {
+  id              String      @id @default(cuid())
+  userId          String
+  user            User        @relation(fields: [userId], references: [id])
+  items           OrderItem[]
+  
+  totalAmount     Decimal     @db.Decimal(12, 2)
+  status          OrderStatus @default(PENDING)
+  
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@map("order")
+}
+
+model OrderItem {
+  id              String   @id @default(cuid())
+  orderId         String
+  order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product  @relation(fields: [productId], references: [id])
+  
+  quantity        Int
+  
+  priceAtPurchase Decimal  @db.Decimal(12, 2)
+
+  @@map("order_item")
 }
