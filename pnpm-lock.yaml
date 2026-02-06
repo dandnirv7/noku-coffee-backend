@@ -74,6 +74,9 @@ importers:
       rxjs:
         specifier: ^7.8.1
         version: 7.8.2
+      xendit-node:
+        specifier: ^7.0.0
+        version: 7.0.0
     devDependencies:
       '@eslint/eslintrc':
         specifier: ^3.2.0
@@ -4160,6 +4163,10 @@ packages:
         optional: true
       utf-8-validate:
         optional: true
+
+  xendit-node@7.0.0:
+    resolution: {integrity: sha512-atsCQ9femoWLu+hU5rY0TZ+ZhqSYbpTtABZN7rGMhhBh1xLhTuY1rgLfoaXzFiRt3eOQRqsew78wPUcQn1QckA==}
+    engines: {node: '>=18.0.0'}
 
   xtend@4.0.2:
     resolution: {integrity: sha512-LKYU1iAXJXUgAXn9URjiu+MWhyUXHsvfp7mcuYm9dSUKK0/CjtrUwFAxD82/mCWbtLsGjFIad0wIsod4zrTAEQ==}
@@ -8943,6 +8950,8 @@ snapshots:
   ws@7.5.10: {}
 
   ws@8.18.3: {}
+
+  xendit-node@7.0.0: {}
 
   xtend@4.0.2: {}
 
