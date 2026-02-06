@@ -1,9 +1,16 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '@infra/database/prisma.service';
-import { PaymentService } from '../payment/payment.service';
-import { OrderStatus, ProductType, Product } from 'generated/prisma/client';
 import { CreatePaymentLogDto } from '@modules/payment/dto/create-payment-log.dto';
+import {
+  BadRequestException,
+  ForbiddenException,
+  GoneException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { Decimal } from '@prisma/client/runtime/client';
+import { OrderStatus, ProductType } from 'generated/prisma/client';
+import { PaymentService } from '../payment/payment.service';
 
 @Injectable()
 export class OrderService {
@@ -25,6 +32,16 @@ export class OrderService {
       .replace(/\//g, '');
     const randomPart = Math.floor(1000 + Math.random() * 9000);
     return `NOKU-ORD-${datePart}${randomPart}`;
+  }
+
+  private isOrderExpired(createdAt: Date): boolean {
+    const EXPIRATION_LIMIT_MINUTES = 1450;
+    const expirationTime = new Date(createdAt);
+    expirationTime.setMinutes(
+      expirationTime.getMinutes() + EXPIRATION_LIMIT_MINUTES,
+    );
+
+    return new Date() > expirationTime;
   }
 
   async checkout(userId: string, addressId: string) {
@@ -192,12 +209,188 @@ export class OrderService {
     }
   }
 
-  async markAsPaid(orderId: string) {
+  async getOrderHistory(userId: string) {
+    return this.prisma.order.findMany({
+      where: { userId },
+      include: { items: { include: { product: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async cancelByUser(userId: string, orderId: string, reason: string) {
+    const order = await this.prisma.order.findUnique({
+      where: {
+        id: orderId,
+      },
+    });
+
+    if (!order) throw new BadRequestException('Order not found');
+    if (order.userId !== userId)
+      throw new ForbiddenException(
+        'You are not authorized to cancel this order',
+      );
+
+    if (order.status !== OrderStatus.PENDING) {
+      throw new BadRequestException(
+        'Cannot cancel order that is processed or paid',
+      );
+    }
+
+    await this.markAsCancelled(orderId, `User Cancelled: ${reason}`);
+
+    return { message: 'Order cancelled successfully' };
+  }
+
+  async repay(userId: string, orderId: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { items: true },
+    });
+
+    if (!order) throw new BadRequestException('Order not found');
+    if (order.userId !== userId)
+      throw new ForbiddenException(
+        'You are not authorized to repay this order',
+      );
+
+    if (
+      order.status !== OrderStatus.CANCELLED &&
+      order.status !== OrderStatus.PENDING
+    ) {
+      throw new BadRequestException('Order cannot be repayed in current state');
+    }
+
+    const retryExternalId = `${order.orderNumber}-RETRY-${Date.now()}`;
+
+    await this.prisma.$transaction(
+      async (tx) => {
+        for (const item of order.items) {
+          const product = await tx.product.findUnique({
+            where: { id: item.productId },
+            include: { bundleItems: true },
+          });
+
+          if (!product || product.stock < item.quantity) {
+            throw new BadRequestException(
+              `The stock of ${item.productNameSnapshot} products is insufficient to repay`,
+            );
+          }
+
+          if (product.type.includes(ProductType.BUNDLE)) {
+            for (const bItem of product.bundleItems) {
+              await tx.product.update({
+                where: { id: bItem.productId },
+                data: { stock: { decrement: bItem.quantity * item.quantity } },
+              });
+            }
+          } else {
+            await tx.product.update({
+              where: { id: item.productId },
+              data: { stock: { decrement: item.quantity } },
+            });
+          }
+        }
+
+        await tx.order.update({
+          where: { id: orderId },
+          data: {
+            status: OrderStatus.PENDING,
+            paymentExternalId: retryExternalId,
+          },
+        });
+      },
+      { timeout: 10000 },
+    );
+    try {
+      const user = await this.prisma.user.findUnique({ where: { id: userId } });
+
+      const xenditInvoice = await this.paymentService.createInvoice({
+        orderId: retryExternalId,
+        orderNumber: order.orderNumber,
+        amount: Number(order.totalAmount),
+        customer: {
+          email: user.email,
+          givenNames: user.name,
+          addresses: [
+            { country: 'Indonesia', streetLine1: order.shippingAddress },
+          ],
+          mobileNumber: order.shippingPhone,
+        },
+        items: order.items.map((item) => ({
+          name: item.productNameSnapshot,
+          quantity: item.quantity,
+          price: Number(item.priceAtPurchase),
+        })),
+      });
+
+      return await this.prisma.order.update({
+        where: { id: orderId },
+        data: {
+          paymentUrl: xenditInvoice.invoiceUrl,
+          paymentStatus: 'PENDING',
+        },
+      });
+    } catch (error) {
+      throw new Error(`Xendit Repay Failed: ${error.message}`);
+    }
+  }
+
+  async requestRefund(userId: string, orderId: string, reason: string) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
     });
 
+    if (order.userId !== userId) throw new ForbiddenException();
+    if (order.status !== OrderStatus.PAID) {
+      throw new BadRequestException('Only PAID orders can be refunded');
+    }
+
+    return this.prisma.order.update({
+      where: { id: orderId },
+      data: { status: OrderStatus.REFUND_REQUESTED },
+    });
+  }
+
+  async processRefund(orderId: string, adminNotes: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+    });
+
+    await this.markAsCancelled(orderId, `REFUND APPROVED: ${adminNotes}`);
+
+    return this.prisma.order.update({
+      where: { id: orderId },
+      data: {
+        status: OrderStatus.REFUNDED,
+        paymentStatus: 'REFUNDED',
+      },
+    });
+  }
+
+  async findOrderByPaymentId(paymentExternalId: string) {
+    return this.prisma.order.findFirst({
+      where: {
+        OR: [
+          { paymentExternalId: paymentExternalId },
+          { id: paymentExternalId },
+        ],
+      },
+      select: { id: true, status: true },
+    });
+  }
+
+  async markAsPaid(idOrExternalId: string) {
+    const order = await this.prisma.order.findFirst({
+      where: {
+        OR: [{ id: idOrExternalId }, { paymentExternalId: idOrExternalId }],
+      },
+    });
+
     if (!order) throw new BadRequestException('Order not found');
+
+    if (order.status === OrderStatus.PAID) {
+      throw new BadRequestException('ALREADY_PAID');
+    }
 
     if (order.status === OrderStatus.CANCELLED) {
       throw new BadRequestException(
@@ -205,24 +398,26 @@ export class OrderService {
       );
     }
 
-    if (order.status === OrderStatus.PAID) {
-      throw new BadRequestException('ALREADY_PAID');
+    try {
+      return await this.prisma.order.update({
+        where: {
+          id: order.id,
+          status: OrderStatus.PENDING,
+        },
+        data: {
+          status: OrderStatus.PAID,
+          paidAt: new Date(),
+          paymentStatus: 'PAID',
+        },
+      });
+    } catch (error) {
+      if (error.code === 'P2025') {
+        throw new BadRequestException(
+          'Order status has changed during processing. Please refresh.',
+        );
+      }
+      throw error;
     }
-
-    if (order.status !== OrderStatus.PENDING) {
-      throw new BadRequestException(
-        `Invalid state transition from ${order.status} to PAID`,
-      );
-    }
-
-    return this.prisma.order.update({
-      where: { id: orderId },
-      data: {
-        status: OrderStatus.PAID,
-        paidAt: new Date(),
-        paymentStatus: 'PAID',
-      },
-    });
   }
 
   async markAsCancelled(orderId: string, reason: string) {
@@ -298,20 +493,34 @@ export class OrderService {
     this.logger.log(`Order ${orderId} successfully CANCELLED and RESTOCKED.`);
   }
 
-  async getOrderHistory(userId: string) {
-    return this.prisma.order.findMany({
-      where: { userId },
-      include: { items: { include: { product: true } } },
-      orderBy: { createdAt: 'desc' },
-    });
-  }
-
   async getOrderStatus(orderId: string): Promise<OrderStatus | null> {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
       select: { status: true },
     });
     return order?.status || null;
+  }
+
+  async getOrderById(orderId: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+    });
+
+    if (!order) throw new NotFoundException('Order not found');
+
+    if (
+      order.status === OrderStatus.PENDING &&
+      this.isOrderExpired(order.createdAt)
+    ) {
+      await this.markAsCancelled(
+        order.id,
+        'System: Cancelled on access (Expired)',
+      );
+
+      throw new GoneException('This order has expired');
+    }
+
+    return order;
   }
 
   async createPaymentLog(
