@@ -3,7 +3,7 @@ import { MailerService } from '@infra/mailer/mailer.service';
 import { authTemplates } from '@infra/mailer/templates/auth-templates';
 import { betterAuth } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
-import { admin, bearer } from 'better-auth/plugins';
+import { admin, bearer, customSession } from 'better-auth/plugins';
 
 export function createAuth(prisma: PrismaService, mailer: MailerService) {
   return betterAuth({
@@ -49,6 +49,24 @@ export function createAuth(prisma: PrismaService, mailer: MailerService) {
         defaultRole: 'USER',
         adminRoles: 'ADMIN',
       }),
+      customSession(async ({ user, session }) => {
+        const address = await prisma.address.findMany({
+          where: { userId: session.userId },
+        });
+        return {
+          user: {
+            ...user,
+            address,
+          },
+          session,
+        };
+      }),
     ],
+    advanced: {
+      disableOriginCheck: true,
+      disableCSRFCheck: true,
+      useSecureCookies: true,
+      trustedOrigins: [process.env.TRUSTED_ORIGINS],
+    },
   });
 }

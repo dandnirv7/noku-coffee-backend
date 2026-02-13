@@ -12,6 +12,8 @@ const prisma = new PrismaClient({ adapter });
 
 const auth = betterAuth({
   database: prismaAdapter(prisma, { provider: 'postgresql' }),
+  trustedOrigins: [process.env.FRONTEND_URL!],
+
   emailAndPassword: { enabled: true },
   user: {
     additionalFields: {
@@ -25,6 +27,12 @@ const auth = betterAuth({
       adminRoles: 'ADMIN',
     }),
   ],
+  advanced: {
+    disableOriginCheck: true,
+    disableCSRFCheck: true,
+    useSecureCookies: true,
+    trustedOrigins: [process.env.TRUSTED_ORIGINS],
+  },
 });
 
 export default auth;
