@@ -9,12 +9,14 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { AllowAnonymous } from '@thallesp/nestjs-better-auth';
 import { OrderStatus } from 'generated/prisma/client';
 import { InvoiceCallback, InvoiceStatus } from 'xendit-node/invoice/models';
 import { OrderService } from '../order/order.service';
 import { PaymentService } from './payment.service';
 
+@SkipThrottle()
 @Controller('payments')
 export class PaymentController {
   constructor(
