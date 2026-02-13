@@ -9,7 +9,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Decimal } from '@prisma/client/runtime/client';
-import { OrderStatus, ProductType } from 'generated/prisma/client';
+import {
+  DiscountType,
+  OrderStatus,
+  ProductType,
+} from 'generated/prisma/client';
 import { PaymentService } from '../payment/payment.service';
 
 @Injectable()
@@ -44,7 +48,7 @@ export class OrderService {
     return new Date() > expirationTime;
   }
 
-  async checkout(userId: string, addressId: string) {
+  async checkout(userId: string, addressId: string, promoCode?: string) {
     const cart = await this.prisma.cart.findUnique({
       where: { userId },
       include: { items: { include: { product: true } } },
@@ -81,7 +85,7 @@ export class OrderService {
 
     const result = await this.prisma.$transaction(
       async (tx) => {
-        let totalAmount = new Decimal(0);
+        let subtotal = new Decimal(0);
         const orderItemsData = [];
         const xenditItems = [];
 
@@ -123,8 +127,8 @@ export class OrderService {
           }
 
           const price = new Decimal(product.price);
-          const subtotal = price.mul(item.quantity);
-          totalAmount = totalAmount.add(subtotal);
+          const itemSubtotal = price.mul(item.quantity);
+          subtotal = subtotal.add(itemSubtotal);
 
           orderItemsData.push({
             productId: item.productId,
@@ -147,11 +151,89 @@ export class OrderService {
           });
         }
 
+        let discountAmount = new Decimal(0);
+        let promoCodeId: string | null = null;
+        let selectedPromo = null;
+
+        if (promoCode) {
+          const promo = await tx.promoCode.findUnique({
+            where: { code: promoCode },
+          });
+
+          if (!promo) {
+            throw new BadRequestException('Kode promo tidak valid');
+          }
+
+          if (!promo.isActive) {
+            throw new BadRequestException('Kode promo tidak aktif');
+          }
+
+          const now = new Date();
+          if (now < promo.startDate || now > promo.endDate) {
+            throw new BadRequestException('Kode promo sudah kadaluarsa');
+          }
+
+          if (promo.usageLimit && promo.usageCount >= promo.usageLimit) {
+            throw new BadRequestException('Kuota promo habis');
+          }
+
+          if (promo.minOrderAmount && subtotal.lt(promo.minOrderAmount)) {
+            throw new BadRequestException(
+              `Minimal pembelian untuk promo ini adalah ${promo.minOrderAmount}`,
+            );
+          }
+
+          if (promo.usagePerUser) {
+            const userUsage = await tx.voucherUsage.count({
+              where: { userId, promoCodeId: promo.id },
+            });
+            if (userUsage >= promo.usagePerUser) {
+              throw new BadRequestException(
+                'Anda sudah mencapai batas penggunaan promo ini',
+              );
+            }
+          }
+
+          if (promo.type === DiscountType.FIXED) {
+            discountAmount = promo.value;
+          } else if (promo.type === DiscountType.PERCENTAGE) {
+            discountAmount = subtotal.mul(promo.value).div(100);
+            if (promo.maxDiscount && discountAmount.gt(promo.maxDiscount)) {
+              discountAmount = promo.maxDiscount;
+            }
+          }
+
+          if (discountAmount.gt(subtotal)) {
+            discountAmount = subtotal;
+          }
+
+          promoCodeId = promo.id;
+          selectedPromo = promo;
+        }
+
+        const discountVal = discountAmount.toNumber();
+        const subtotalVal = subtotal.toNumber();
+
+        let taxableAmount = subtotal.sub(discountAmount);
+        if (taxableAmount.isNeg()) {
+          taxableAmount = new Decimal(0);
+        }
+
+        const taxAmount = taxableAmount.mul(0.11);
+        const shippingCost = new Decimal(15000);
+
+        const totalAmount = taxableAmount.add(taxAmount).add(shippingCost);
+
         const order = await tx.order.create({
           data: {
             userId,
             orderNumber: this.generateOrderNumber(),
             totalAmount,
+            subtotal,
+            discountAmount,
+            taxAmount,
+            shippingCost,
+            promoCodeId,
             status: OrderStatus.PENDING,
             shippingAddress: fullAddressSnapshot,
             shippingPhone: address.phone,
@@ -160,15 +242,43 @@ export class OrderService {
           },
         });
 
+        if (selectedPromo) {
+          await tx.voucherUsage.create({
+            data: {
+              userId,
+              promoCodeId: selectedPromo.id,
+              orderId: order.id,
+            },
+          });
+
+          await tx.promoCode.update({
+            where: { id: selectedPromo.id },
+            data: { usageCount: { increment: 1 } },
+          });
+        }
+
         await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
 
-        return { order, xenditItems, totalAmount: totalAmount.toNumber() };
+        return {
+          order,
+          xenditItems,
+          totalAmount: totalAmount.toNumber(),
+          fees: [
+            { type: 'SHIPPING', value: shippingCost.toNumber() },
+            { type: 'TAX', value: taxAmount.toNumber() },
+            ...(discountVal > 0
+              ? [{ type: 'DISCOUNT', value: -discountVal }]
+              : []),
+          ],
+        };
       },
       { timeout: 15000 },
     );
 
     try {
       const user = await this.prisma.user.findUnique({ where: { id: userId } });
+
+      this.logger.debug(result.fees);
 
       const xenditInvoice = await this.paymentService.createInvoice({
         orderId: result.order.id,
@@ -189,6 +299,7 @@ export class OrderService {
           ],
         },
         items: result.xenditItems,
+        fees: result.fees,
       });
 
       const updatedOrder = await this.prisma.order.update({

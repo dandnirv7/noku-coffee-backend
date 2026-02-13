@@ -8,4 +8,8 @@ export class CheckoutDto {
   @IsString()
   @IsOptional()
   notes?: string;
+
+  @IsString()
+  @IsOptional()
+  promoCode?: string;
 }

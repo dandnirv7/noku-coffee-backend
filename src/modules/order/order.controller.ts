@@ -31,6 +31,7 @@ export class OrderController {
     const order = await this.orderService.checkout(
       user.id,
       checkoutDto.addressId,
+      checkoutDto.promoCode,
     );
 
     return {
