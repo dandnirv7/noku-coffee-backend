@@ -31,6 +31,8 @@ enum OrderStatus {
   SHIPPED
   COMPLETED
   CANCELLED
+  REFUND_REQUESTED
+  REFUNDED
 }
 
 model User {
@@ -50,6 +52,7 @@ model User {
   Cart          Cart?
   WishlistItems WishlistItem[]
   Orders        Order[]
+  voucherUsages VoucherUsage[]
 
   banned     Boolean?  @default(false)
   banReason  String?
@@ -170,6 +173,7 @@ model Product {
   cartItems     CartItem[]
   wishlistItems WishlistItem[]
   orderItems    OrderItem[]
+  productDiscounts ProductDiscount[]
 
   @@map("product")
 }
@@ -251,6 +255,18 @@ model Order {
 
   paymentLogs     PaymentLog[]
 
+  // Financial Snapshot
+  subtotal        Decimal   @default(0) @db.Decimal(12, 2)
+  shippingCost    Decimal   @default(0) @db.Decimal(12, 2)
+  taxAmount       Decimal   @default(0) @db.Decimal(12, 2)
+  
+  // Discount Snapshot
+  discountAmount  Decimal   @default(0) @db.Decimal(12, 2)
+  promoCodeId     String?
+  promoCode       PromoCode? @relation(fields: [promoCodeId], references: [id])
+  
+  voucherUsage    VoucherUsage?
+
   @@map("order")
 }
 
@@ -279,4 +295,69 @@ model PaymentLog {
   createdAt   DateTime @default(now())
 
   @@map("payment_log")
+}
+
+enum DiscountType {
+  FIXED
+  PERCENTAGE
+}
+
+model PromoCode {
+  id              String       @id @default(cuid())
+  code            String       @unique
+  description     String?
+  type            DiscountType
+  value           Decimal      @db.Decimal(12, 2) 
+  
+  minOrderAmount  Decimal?     @db.Decimal(12, 2)
+  maxDiscount     Decimal?     @db.Decimal(12, 2) 
+  
+  startDate       DateTime
+  endDate         DateTime
+  isActive        Boolean      @default(true)
+  
+  usageLimit      Int?         
+  usageCount      Int          @default(0) 
+  
+  usagePerUser    Int?         
+  
+  usages          VoucherUsage[]
+  orders          Order[]
+  
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@map("promo_code")
+}
+
+model VoucherUsage {
+  id          String    @id @default(cuid())
+  userId      String
+  promoCodeId String
+  promoCode   PromoCode @relation(fields: [promoCodeId], references: [id])
+  user        User      @relation(fields: [userId], references: [id])
+  orderId     String    @unique
+  order       Order     @relation(fields: [orderId], references: [id])
+  usedAt      DateTime  @default(now())
+
+  @@map("voucher_usage")
+}
+
+model ProductDiscount {
+  id          String       @id @default(cuid())
+  productId   String
+  product     Product      @relation(fields: [productId], references: [id])
+  
+  type        DiscountType
+  value       Decimal      @db.Decimal(12, 2)
+  
+  startDate   DateTime
+  endDate     DateTime
+  isActive    Boolean      @default(true)
+  
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([productId])
+  @@map("product_discount")
 }
