@@ -87,10 +87,9 @@ export class CartService {
       },
     }));
 
-    const total = items.reduce(
-      (acc, item) => acc + item.product.price * item.quantity,
-      0,
-    );
+    const total = items
+      .filter((item) => item.product.stock > 0)
+      .reduce((acc, item) => acc + item.product.price * item.quantity, 0);
 
     return { ...cart, items, total };
   }

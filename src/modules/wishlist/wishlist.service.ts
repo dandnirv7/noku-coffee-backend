@@ -46,22 +46,33 @@ export class WishlistService {
   }
 
   async getWishlist(userId: string) {
-    const items = this.prisma.wishlistItem.findMany({
+    const products = await this.prisma.wishlistItem.findMany({
       where: { userId },
       include: {
-        product: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            price: true,
-            images: true,
-            stock: true,
-          },
-        },
+        product: true,
       },
       orderBy: { createdAt: 'desc' },
     });
+
+    const category = await this.prisma.category.findMany({
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+      },
+    });
+
+    const items = products.map((item) => {
+      return {
+        ...item,
+        product: {
+          ...item.product,
+          categoryId: item.product.categoryId,
+          category: category.find((c) => c.id === item.product.categoryId),
+        },
+      };
+    });
+
     return items;
   }
 }
