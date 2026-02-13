@@ -8,6 +8,10 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     bodyParser: false,
   });
+
+  const server = app.getHttpAdapter().getInstance();
+  server.set('trust proxy', 1);
+
   app.setGlobalPrefix('api');
 
   app.useGlobalPipes(
@@ -27,8 +31,15 @@ async function bootstrap() {
   app.useGlobalFilters(new PrismaExceptionFilter(httpAdapter));
 
   app.enableCors({
-    origin: process.env.FRONTEND_URL,
+    origin: [process.env.FRONTEND_URL],
     credentials: true,
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'cache-control',
+      'ngrok-skip-browser-warning',
+      'x-requested-with',
+    ],
   });
 
   const port = process.env.PORT ?? 3001;

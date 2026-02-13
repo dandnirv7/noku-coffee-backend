@@ -9,16 +9,28 @@ import { OrderModule } from '@modules/order/order.module';
 import { PaymentModule } from '@modules/payment/payment.module';
 import { ProductsModule } from '@modules/products/products.module';
 import { WishlistModule } from '@modules/wishlist/wishlist.module';
+import { TransactionModule } from '@modules/transaction/transaction.module';
+import { PromoModule } from '@modules/promo/promo.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from '@thallesp/nestjs-better-auth';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ScheduleModule } from '@nestjs/schedule';
+import { UserController } from '@modules/user/user.controller';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env' }),
+    ThrottlerModule.forRoot([
+      {
+        name: 'default',
+        ttl: 60000,
+        limit: 60,
+      },
+    ]),
     PrismaModule,
     MailerModule,
     ProductsModule,
@@ -27,6 +39,8 @@ import { ScheduleModule } from '@nestjs/schedule';
     WishlistModule,
     OrderModule,
     PaymentModule,
+    TransactionModule,
+    PromoModule,
     ScheduleModule.forRoot(),
     AuthModule.forRootAsync({
       imports: [PrismaModule, MailerModule],
@@ -36,7 +50,7 @@ import { ScheduleModule } from '@nestjs/schedule';
       }),
     }),
   ],
-  controllers: [AppController],
-  providers: [AppService],
+  controllers: [AppController, UserController],
+  providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule {}
