@@ -615,6 +615,18 @@ export class OrderService {
   async getOrderById(orderId: string) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
+      include: {
+        items: {
+          include: {
+            product: { select: { images: true } },
+          },
+        },
+        user: { select: { name: true, email: true } },
+        paymentLogs: {
+          orderBy: { createdAt: 'asc' },
+          take: 1,
+        },
+      },
     });
 
     if (!order) throw new NotFoundException('Order not found');
@@ -631,7 +643,110 @@ export class OrderService {
       throw new GoneException('This order has expired');
     }
 
-    return order;
+    // Build timeline based on order status
+    const statusOrder: OrderStatus[] = [
+      OrderStatus.PENDING,
+      OrderStatus.PAID,
+      OrderStatus.SHIPPED,
+      OrderStatus.COMPLETED,
+    ];
+
+    const timelineTemplates = [
+      {
+        status: 'Pesanan Dibuat',
+        forStatus: OrderStatus.PENDING,
+        description: 'Pesanan kamu telah diterima',
+      },
+      {
+        status: 'Pembayaran Dikonfirmasi',
+        forStatus: OrderStatus.PAID,
+        description: 'Pembayaran telah diverifikasi',
+      },
+      {
+        status: 'Pesanan Diproses',
+        forStatus: OrderStatus.PAID,
+        description: 'Pesanan kamu sedang diproses',
+      },
+      {
+        status: 'Pesanan Dikirim',
+        forStatus: OrderStatus.SHIPPED,
+        description: 'Pesanan kamu telah dikirim',
+      },
+      {
+        status: 'Pesanan Dalam Perjalanan',
+        forStatus: OrderStatus.SHIPPED,
+        description: 'Pesanan kamu sedang dalam perjalanan',
+      },
+      {
+        status: 'Pesanan Diterima',
+        forStatus: OrderStatus.COMPLETED,
+        description: 'Pesanan kamu telah diterima',
+      },
+    ];
+
+    const currentStatusIndex = statusOrder.indexOf(order.status as OrderStatus);
+
+    const timeline = timelineTemplates.map((t) => {
+      const tStatusIndex = statusOrder.indexOf(t.forStatus);
+      const isReached = currentStatusIndex >= tStatusIndex;
+
+      let date: Date | null = null;
+      if (isReached) {
+        if (t.status === 'Pesanan Dibuat') date = order.createdAt;
+        else if (
+          t.status === 'Pembayaran Dikonfirmasi' ||
+          t.status === 'Pesanan Diproses'
+        )
+          date = order.paidAt ?? null;
+        else if (
+          t.status === 'Pesanan Dikirim' ||
+          t.status === 'Pesanan Dalam Perjalanan'
+        )
+          date = order.updatedAt;
+        else if (t.status === 'Pesanan Diterima') date = order.updatedAt;
+      }
+
+      return { status: t.status, date, description: t.description };
+    });
+
+    // Parse shipping address snapshot: "streetLine1, streetLine2, city, province, postalCode"
+    const addressParts = order.shippingAddress.split(',').map((p) => p.trim());
+
+    return {
+      id: order.orderNumber,
+      date: order.createdAt,
+      status: order.status.toLowerCase(),
+      items: order.items.map((item) => ({
+        name: item.productNameSnapshot,
+        quantity: item.quantity,
+        price: Number(item.priceAtPurchase),
+        image: item.product?.images?.[0] ?? null,
+      })),
+      subtotal: Number(order.subtotal),
+      discount: Number(order.discountAmount),
+      deliveryFee: Number(order.shippingCost),
+      total: Number(order.totalAmount),
+      paymentMethod: null, // Not stored in DB; populate from Xendit if needed
+      paymentStatus:
+        order.paymentStatus?.charAt(0).toUpperCase() +
+        (order.paymentStatus?.slice(1).toLowerCase() ?? ''),
+      customer: {
+        name: order.shippingReceiver,
+        phone: order.shippingPhone,
+        email: order.user.email,
+      },
+      shipping: {
+        address: addressParts.slice(0, 2).join(', '),
+        city: addressParts[2] ?? '',
+        province: addressParts[3] ?? '',
+        postalCode: addressParts[4] ?? '',
+        country: 'Indonesia',
+        method: 'Same Day Delivery',
+        estimatedDelivery: null,
+      },
+      trackingNumber: order.paymentExternalId ?? order.orderNumber,
+      timeline,
+    };
   }
 
   async createPaymentLog(
