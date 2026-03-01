@@ -212,7 +212,6 @@ export class OrderService {
         }
 
         const discountVal = discountAmount.toNumber();
-        const subtotalVal = subtotal.toNumber();
 
         let taxableAmount = subtotal.sub(discountAmount);
         if (taxableAmount.isNeg()) {
@@ -451,6 +450,7 @@ export class OrderService {
       where: { id: orderId },
     });
 
+    if (!order) throw new BadRequestException('Order not found');
     if (order.userId !== userId) throw new ForbiddenException();
     if (order.status !== OrderStatus.PAID) {
       throw new BadRequestException('Only PAID orders can be refunded');
@@ -643,7 +643,6 @@ export class OrderService {
       throw new GoneException('This order has expired');
     }
 
-    // Build timeline based on order status
     const statusOrder: OrderStatus[] = [
       OrderStatus.PENDING,
       OrderStatus.PAID,
@@ -709,7 +708,6 @@ export class OrderService {
       return { status: t.status, date, description: t.description };
     });
 
-    // Parse shipping address snapshot: "streetLine1, streetLine2, city, province, postalCode"
     const addressParts = order.shippingAddress.split(',').map((p) => p.trim());
 
     return {
@@ -726,7 +724,7 @@ export class OrderService {
       discount: Number(order.discountAmount),
       deliveryFee: Number(order.shippingCost),
       total: Number(order.totalAmount),
-      paymentMethod: null, // Not stored in DB; populate from Xendit if needed
+      paymentMethod: null,
       paymentStatus:
         order.paymentStatus?.charAt(0).toUpperCase() +
         (order.paymentStatus?.slice(1).toLowerCase() ?? ''),

@@ -5,21 +5,22 @@ import { MailerModule } from '@infra/mailer/mailer.module';
 import { MailerService } from '@infra/mailer/mailer.service';
 import { CartModule } from '@modules/cart/cart.module';
 import { CategoriesModule } from '@modules/categories/categories.module';
+import { DailyDiscountModule } from '@modules/daily-discount/daily-discount.module';
 import { OrderModule } from '@modules/order/order.module';
 import { PaymentModule } from '@modules/payment/payment.module';
 import { ProductsModule } from '@modules/products/products.module';
-import { WishlistModule } from '@modules/wishlist/wishlist.module';
-import { TransactionModule } from '@modules/transaction/transaction.module';
 import { PromoModule } from '@modules/promo/promo.module';
+import { TransactionModule } from '@modules/transaction/transaction.module';
+import { UserController } from '@modules/user/user.controller';
+import { WishlistModule } from '@modules/wishlist/wishlist.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from '@thallesp/nestjs-better-auth';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { ScheduleModule } from '@nestjs/schedule';
-import { UserController } from '@modules/user/user.controller';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { UserController } from '@modules/user/user.controller';
     PaymentModule,
     TransactionModule,
     PromoModule,
+    DailyDiscountModule,
     ScheduleModule.forRoot(),
     AuthModule.forRootAsync({
       imports: [PrismaModule, MailerModule],
